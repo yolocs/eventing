@@ -62,7 +62,7 @@ func MakeIngress(args *IngressArgs) *appsv1.Deployment {
 					Labels: IngressLabels(args.Broker.Name),
 					Annotations: map[string]string{
 						"proxy.knative.dev/inject":   "true",
-						"proxy.knative.dev/settings": "{\"audiences\":[\"default-kne-trigger-kn-channel.secexp1.svc.cluster.local\"],\"policy\":\"broker-in-policy\",\"servicePort\":8080,\"payloadPolicy\":true}",
+						"proxy.knative.dev/settings": "{\"audiences\":[\"svc.cluster.local\"],\"policy\":\"broker-in-policy\",\"servicePort\":8080,\"payloadPolicy\":true}",
 					},
 				},
 				Spec: corev1.PodSpec{
