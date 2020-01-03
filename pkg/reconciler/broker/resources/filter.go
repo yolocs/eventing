@@ -59,6 +59,10 @@ func MakeFilterDeployment(args *FilterArgs) *appsv1.Deployment {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: FilterLabels(args.Broker.Name),
+					Annotations: map[string]string{
+						"proxy.knative.dev/inject":   "true",
+						"proxy.knative.dev/settings": "{\"policy\":\"broker-f-policy\",\"servicePort\":8080,\"replyIdentity\":true}",
+					},
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: args.ServiceAccountName,

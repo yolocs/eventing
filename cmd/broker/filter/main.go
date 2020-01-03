@@ -34,6 +34,7 @@ import (
 	"knative.dev/pkg/signals"
 	"knative.dev/pkg/system"
 
+	"knative.dev/eventing/pkg/authhack/identity"
 	"knative.dev/eventing/pkg/broker/filter"
 	"knative.dev/eventing/pkg/tracing"
 
@@ -117,10 +118,11 @@ func main() {
 	}
 
 	reporter := filter.NewStatsReporter(env.PodName, env.ContainerName)
+	impersonator := identity.NewServiceAccountTokens(kubeClient)
 
 	// We are running both the receiver (takes messages in from the Broker) and the dispatcher (send
 	// the messages to the triggers' subscribers) in this binary.
-	handler, err := filter.NewHandler(logger, triggerInformer.Lister().Triggers(env.Namespace), reporter)
+	handler, err := filter.NewHandler(logger, triggerInformer.Lister().Triggers(env.Namespace), impersonator, reporter)
 	if err != nil {
 		logger.Fatal("Error creating Handler", zap.Error(err))
 	}

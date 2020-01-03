@@ -114,7 +114,7 @@ func main() {
 		Host:   env.Channel,
 		Path:   "/",
 	}
-
+    
 	// Watch the logging config map and dynamically update logging levels.
 	configMapWatcher := configmap.NewInformedWatcher(kubeclient.Get(ctx), system.Namespace())
 	// Watch the observability config map and dynamically update metrics exporter.

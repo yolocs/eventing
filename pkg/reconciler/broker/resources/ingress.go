@@ -60,6 +60,10 @@ func MakeIngress(args *IngressArgs) *appsv1.Deployment {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: IngressLabels(args.Broker.Name),
+					Annotations: map[string]string{
+						"proxy.knative.dev/inject":   "true",
+						"proxy.knative.dev/settings": "{\"audiences\":[\"default-kne-trigger-kn-channel.secexp1.svc.cluster.local\"],\"policy\":\"broker-in-policy\",\"servicePort\":8080,\"payloadPolicy\":true}",
+					},
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: args.ServiceAccountName,
@@ -87,6 +91,14 @@ func MakeIngress(args *IngressArgs) *appsv1.Deployment {
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{
 											FieldPath: "metadata.namespace",
+										},
+									},
+								},
+								{
+									Name: "SERVICE_ACCOUNT",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "spec.serviceAccountName",
 										},
 									},
 								},

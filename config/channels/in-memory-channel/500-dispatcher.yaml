@@ -12,6 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+apiVersion: v1
+data:
+  policy.rego: |
+    package knative.dev
+
+    default allow = false
+
+    allow {
+      endswith(input.source.identity, ":eventing-broker-ingress")
+    }
+kind: ConfigMap
+metadata:
+  name: imc-dispatcher-policy
+  namespace: knative-eventing
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,6 +43,9 @@ spec:
   template:
     metadata:
       labels: *labels
+      annotations:
+        proxy.knative.dev/inject: "true"
+        proxy.knative.dev/settings: "{\"tokenExpiration\":7200,\"audiences\":[\"svc.cluster.local\"],\"policy\":\"imc-dispatcher-policy\",\"servicePort\":8080}"
     spec:
       serviceAccountName: imc-dispatcher
       containers:

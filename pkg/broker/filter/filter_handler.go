@@ -28,6 +28,7 @@ import (
 	"go.opencensus.io/trace"
 	"go.uber.org/zap"
 	eventingv1alpha1 "knative.dev/eventing/pkg/apis/eventing/v1alpha1"
+	"knative.dev/eventing/pkg/authhack/identity"
 	"knative.dev/eventing/pkg/broker"
 	eventinglisters "knative.dev/eventing/pkg/client/listers/eventing/v1alpha1"
 	"knative.dev/eventing/pkg/kncloudevents"
@@ -64,6 +65,7 @@ type Handler struct {
 	ceClient      cloudevents.Client
 	reporter      StatsReporter
 	isReady       *atomic.Value
+	impersonator  *identity.ServiceAccountTokens
 }
 
 // FilterResult has the result of the filtering operation.
@@ -71,7 +73,7 @@ type FilterResult string
 
 // NewHandler creates a new Handler and its associated MessageReceiver. The caller is responsible for
 // Start()ing the returned Handler.
-func NewHandler(logger *zap.Logger, triggerLister eventinglisters.TriggerNamespaceLister, reporter StatsReporter) (*Handler, error) {
+func NewHandler(logger *zap.Logger, triggerLister eventinglisters.TriggerNamespaceLister, impersonator *identity.ServiceAccountTokens, reporter StatsReporter) (*Handler, error) {
 	httpTransport, err := cloudevents.NewHTTPTransport(cloudevents.WithBinaryEncoding(), cloudevents.WithMiddleware(pkgtracing.HTTPSpanIgnoringPaths(readyz)))
 	if err != nil {
 		return nil, err
@@ -92,6 +94,7 @@ func NewHandler(logger *zap.Logger, triggerLister eventinglisters.TriggerNamespa
 		ceClient:      ceClient,
 		reporter:      reporter,
 		isReady:       &atomic.Value{},
+		impersonator:  impersonator,
 	}
 	r.isReady.Store(false)
 
@@ -203,6 +206,7 @@ func (r *Handler) serveHTTP(ctx context.Context, event cloudevents.Event, resp *
 		return err
 	}
 	resp.Event = responseEvent
+	r.logger.Sugar().Infof("Responding event: %v", resp.Event.String())
 	resp.Context = &cloudevents.HTTPTransportResponseContext{
 		Header: utils.PassThroughHeaders(tctx.Header),
 	}
@@ -224,6 +228,7 @@ func (r *Handler) sendEvent(ctx context.Context, tctx cloudevents.HTTPTransportC
 		broker:     t.Spec.Broker,
 		filterType: triggerFilterAttribute(t.Spec.Filter, "type"),
 	}
+	sa, requiresImpersonation := t.ObjectMeta.Annotations["impersonate.knative.dev"]
 
 	subscriberURI := t.Status.SubscriberURI
 	if subscriberURI == nil {
@@ -257,6 +262,15 @@ func (r *Handler) sendEvent(ctx context.Context, tctx cloudevents.HTTPTransportC
 	// Due to an issue in utils.ContextFrom, we don't retain the original trace context from ctx, so
 	// bring it in manually.
 	sendingCTX = trace.NewContext(sendingCTX, trace.FromContext(ctx))
+
+	// Impersonation logic.
+	if requiresImpersonation {
+		sendingCTX, err = r.impersonator.NewSendingContext(ctx, sendingCTX, sa, subscriberURI.URL().Host)
+		if err != nil {
+			r.reporter.ReportEventCount(reportArgs, http.StatusFailedDependency)
+			return nil, err
+		}
+	}
 
 	start := time.Now()
 	rctx, replyEvent, err := r.ceClient.Send(sendingCTX, *event)
